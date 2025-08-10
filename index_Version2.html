@@ -1,0 +1,2012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vocabulary Trading Card Game</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Light gray background */
+        }
+        /* Styles for the card container that enables the flip effect */
+        .card-container {
+            width: 180px; /* Fixed width for cards */
+            height: 250px; /* Fixed height for cards */
+            perspective: 1000px; /* For 3D perspective during flip */
+            margin: 10px;
+            cursor: pointer; /* Indicate clickable for pack cards */
+            position: relative; /* Needed for positioning count */
+        }
+
+        /* Styles for the inner card element that actually flips */
+        .card-inner {
+            width: 100%;
+            height: 100%;
+            transition: transform 0.6s; /* Smooth flip animation */
+            transform-style: preserve-3d; /* Keep children in 3D space */
+            position: relative;
+        }
+
+        /* When the card-container has the 'flipped' class, rotate the inner card */
+        .card-container.flipped .card-inner {
+            transform: rotateY(180deg);
+        }
+
+        /* Base styles for both front and back of the card */
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden; /* Hide the back of the element when facing the user */
+            border-radius: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            text-align: center;
+            border: 2px solid;
+        }
+
+        /* Styling for the front of the card (vocabulary word side) */
+        .card-front {
+            background: linear-gradient(145deg, #ffffff, #f0f0f0); /* Light gradient */
+            transform: rotateY(0deg); /* Default (front-facing) rotation */
+        }
+
+        /* Styling for the back of the card (initially shown when flipped) */
+        .card-back {
+            background-color: #6a0dad; /* A vibrant purple */
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%237b2dcf' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zm0-30V0H4v4H0v2h4v4h2V6H0V4h4z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); /* Simple geometric pattern */
+            transform: rotateY(180deg); /* Rotated to show when the front is hidden */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 2.5rem;
+            font-weight: bold;
+            user-select: none; /* Prevent selection of the question mark */
+        }
+
+
+        /* Rarity-specific border colors for the front of the card */
+        .card-front.common { border-color: #3b82f6; /* Blue */ }
+        .card-front.uncommon { border-color: #22c55e; /* Green */ }
+        .card-front.rare { border-color: #ef4444; /* Red */ }
+
+        /* Rarity-specific text colors for the rarity label */
+        .rarity-common { color: #3b82f6; }
+        .rarity-uncommon { color: #22c55e; }
+        .rarity-rare { color: #ef4444; }
+
+        .word-content {
+            flex-grow: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem; /* text-xl */
+            font-weight: 600; /* font-semibold */
+            word-break: break-word; /* Ensure long words wrap */
+        }
+
+        .card-definition {
+            font-size: 0.85rem;
+            margin-top: 5px;
+            color: #4b5563; /* text-gray-700 */
+            line-height: 1.3;
+            overflow: hidden; /* Hide overflow to prevent card resizing */
+            text-overflow: ellipsis; /* Add ellipsis for overflowing text */
+            display: -webkit-box;
+            -webkit-line-clamp: 3; /* Limit to 3 lines */
+            -webkit-box-orient: vertical;
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .toast {
+            background-color: #333;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            min-width: 200px;
+            text-align: center;
+        }
+        .toast.show {
+            opacity: 1;
+        }
+        .toast.error {
+            background-color: #ef4444; /* Red for errors */
+        }
+
+        .card-count {
+            position: absolute;
+            bottom: 5px; /* Adjust as needed */
+            right: 5px; /* Adjust as needed */
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: #333;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .pending-word-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #e2e8f0; /* bg-gray-200 */
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+        .pending-word-item .remove-btn {
+            background: none;
+            border: none;
+            color: #ef4444; /* text-red-500 */
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 0 5px;
+        }
+
+        /* Full Card Modal Styles */
+        .full-card-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1001; /* Higher than toast */
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        .full-card-modal.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .full-card-content {
+            background: linear-gradient(145deg, #ffffff, #f0f0f0);
+            border-radius: 20px;
+            padding: 30px;
+            position: relative;
+            max-width: 400px; /* Larger size */
+            width: 90%;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            animation: fadeInScale 0.3s ease-out;
+            border: 3px solid; /* Thicker border for large card */
+        }
+        .full-card-content.common { border-color: #3b82f6; }
+        .full-card-content.uncommon { border-color: #22c55e; }
+        .full-card-content.rare { border-color: #ef4444; }
+
+        .full-card-word {
+            font-size: 2.2rem;
+            font-weight: bold;
+            color: #1f2937; /* text-gray-900 */
+            margin-bottom: 15px;
+            word-wrap: break-word;
+        }
+
+        .full-card-definition {
+            font-size: 1.1rem;
+            color: #4b5563; /* text-gray-700 */
+            line-height: 1.5;
+            margin-bottom: 20px;
+            text-align: left; /* Align definition left */
+            max-height: 250px; /* Limit height for very long definitions */
+            overflow-y: auto; /* Enable scrolling for overflow */
+        }
+
+        .full-card-rarity {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .full-card-close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #e0e0e0;
+            border: none;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.2s;
+            color: #333;
+        }
+        .full-card-close-btn:hover {
+            background-color: #ccc;
+        }
+
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* Password Modal Styles */
+        .password-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1002; /* Higher than full card modal */
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .password-modal.show {
+            opacity: 1;
+            visibility: visible;
+        }
+        .password-modal-content {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 350px;
+            width: 90%;
+            animation: fadeInScale 0.3s ease-out;
+            max-height: 90vh; /* Set a max height */
+            overflow-y: auto; /* Enable vertical scrolling */
+            display: flex; /* Ensure flex for internal layout */
+            flex-direction: column; /* Stack children vertically */
+        }
+        .password-input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 15px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            text-align: center;
+        }
+        .password-modal-actions {
+            display: flex;
+            justify-content: space-around;
+            gap: 10px;
+            flex-shrink: 0; /* Prevent buttons from shrinking */
+            margin-top: auto; /* Push buttons to the bottom if content overflows */
+        }
+        .password-modal-actions button {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: background-color 0.2s;
+        }
+        .password-modal-actions .open-pack-btn {
+            background-color: #8b5cf6; /* purple-500 */
+            color: white;
+        }
+        .password-modal-actions .open-pack-btn:hover {
+            background-color: #7c3aed; /* purple-600 */
+        }
+        .password-modal-actions .cancel-btn {
+            background-color: #e5e7eb; /* gray-200 */
+            color: #4b5563; /* gray-700 */
+        }
+        .password-modal-actions .cancel-btn:hover {
+            background-color: #d1d5db; /* gray-300 */
+        }
+        
+        .password-list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #edf2f7; /* bg-gray-100 */
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-bottom: 5px;
+            font-size: 0.95rem;
+            color: #333;
+        }
+        .password-list-item .delete-btn {
+            background: none;
+            border: none;
+            color: #ef4444; /* text-red-500 */
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 0 5px;
+        }
+
+        /* Teacher Password Modal Specific Styles */
+        #teacherPasswordModal .password-modal-content {
+            border: 2px solid #ef4444; /* Red border for teacher login */
+        }
+
+        /* Trade Card Selection Styles */
+        .trade-card-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background-color: #f9fafb;
+        }
+        .trade-card-selector .card-item {
+            background-color: #ffffff;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+            font-size: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 120px; /* Fixed height for consistency */
+        }
+        .trade-card-selector .card-item:hover {
+            border-color: #93c5fd; /* blue-300 */
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .trade-card-selector .card-item.selected {
+            border-color: #3b82f6; /* blue-500 */
+            box-shadow: 0 0 0 2px #3b82f6, 0 4px 10px rgba(0,0,0,0.15);
+            background-color: #e0f2fe; /* blue-50 */
+        }
+        .trade-card-selector .card-item .card-word {
+            font-weight: 600;
+            margin-bottom: 4px;
+            word-break: break-word;
+        }
+        .trade-card-selector .card-item .card-rarity {
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .trade-card-selector .card-item .card-count-label {
+            font-size: 0.7rem;
+            color: #6b7280;
+        }
+        .trade-card-selector .card-item.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: #f3f4f6;
+        }
+
+        .trade-offer-item {
+            background-color: #e0f2fe; /* light blue for offers */
+            border: 1px solid #93c5fd;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .trade-offer-item .trade-header {
+            font-weight: bold;
+            color: #1e40af; /* dark blue */
+            margin-bottom: 10px;
+        }
+        .trade-offer-item .trade-details {
+            display: flex;
+            justify-content: space-around;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .trade-offer-item .trade-col {
+            flex: 1;
+            min-width: 120px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .trade-offer-item .trade-col h4 {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        .trade-offer-item .trade-card-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            text-align: left;
+        }
+        .trade-offer-item .trade-card-list li {
+            font-size: 0.9rem;
+            color: #555;
+            margin-bottom: 3px;
+        }
+        .trade-offer-item .trade-card-list li .rarity {
+            font-weight: bold;
+        }
+        .trade-offer-item .trade-actions {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8 bg-gray-100 min-h-screen">
+    <div class="max-w-7xl mx-auto bg-white p-6 sm:p-10 rounded-xl shadow-lg">
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-center text-gray-800 mb-8">
+            Vocabulary Trading Card Game
+        </h1>
+
+        <!-- User ID Display -->
+        <div id="userIdDisplay" class="text-center text-sm text-gray-600 mb-6">
+            Loading user ID...
+        </div>
+
+        <!-- Teacher Login Button -->
+        <div class="flex justify-center mb-6">
+            <button id="teacherLoginBtn" class="px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg shadow-md transition-colors duration-200">
+                Teacher Login
+            </button>
+        </div>
+
+        <!-- Navigation Buttons -->
+        <div class="flex flex-wrap justify-center mb-8 gap-4">
+            <button id="showManageVocabBtn" class="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg shadow-md transition-colors duration-200">
+                Manage Vocabulary
+            </button>
+            <button id="showCollectedCardsBtn" class="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded-lg shadow-md transition-colors duration-200">
+                View Collected Cards
+            </button>
+            <button id="showTradesBtn" class="px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-lg shadow-md transition-colors duration-200">
+                Trades
+            </button>
+            <button id="showStudentViewBtn" class="px-6 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg shadow-md transition-colors duration-200 hidden">
+                Student View
+            </button>
+        </div>
+
+        <!-- Teacher Only Section (Hidden by default) -->
+        <div id="teacherOnlySection" class="hidden">
+            <!-- Input Section -->
+            <section id="inputSection" class="mb-10 p-6 bg-blue-50 rounded-lg shadow-inner">
+                <h2 class="text-2xl font-bold text-gray-700 mb-4">Add Vocabulary Words</h2>
+                <div class="grid grid-cols-1 gap-4 mb-4">
+                    <div>
+                        <label for="wordInput" class="block text-gray-700 text-sm font-bold mb-2">Vocabulary Word:</label>
+                        <input type="text" id="wordInput"
+                               class="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-gray-800"
+                               placeholder="e.g., Photosynthesis">
+                    </div>
+                    <div>
+                        <label for="definitionInput" class="block text-gray-700 text-sm font-bold mb-2">Definition:</label>
+                        <textarea id="definitionInput"
+                                  class="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 h-24 text-gray-800"
+                                  placeholder="e.g., The process by which green plants and some other organisms use sunlight to synthesize foods from carbon dioxide and water."></textarea>
+                    </div>
+                    <div>
+                        <label for="raritySelect" class="block text-gray-700 text-sm font-bold mb-2">Rarity:</label>
+                        <select id="raritySelect"
+                                class="w-full p-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-gray-800">
+                            <option value="Common">Common</option>
+                            <option value="Uncommon">Uncommon</option>
+                            <option value="Rare">Rare</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="addWordToListBtn"
+                        class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center mb-4">
+                    Add Word to List
+                </button>
+
+                <h3 class="text-xl font-bold text-gray-700 mb-3">Words to be Saved:</h3>
+                <div id="pendingWordsList" class="min-h-[50px] bg-gray-100 p-3 rounded-md border border-gray-200 mb-4">
+                    <p id="noPendingWordsMessage" class="text-gray-500 text-sm text-center">No words added to list yet.</p>
+                </div>
+
+                <button id="saveAllVocabularyBtn"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center">
+                    <span id="saveLoadingSpinner" class="hidden animate-spin h-5 w-5 mr-3 border-b-2 border-white rounded-full"></span>
+                    Save All Vocabulary to Database
+                </button>
+            </section>
+
+            <!-- All Cards Display Section -->
+            <section id="allCardsDisplaySection" class="mb-10 p-6 bg-green-50 rounded-lg shadow-inner">
+                <h2 class="text-2xl font-bold text-gray-700 mb-4">Your Current Vocabulary Cards</h2>
+                <div id="allCardsContainer" class="flex flex-wrap justify-center gap-4 py-4 min-h-[200px] relative">
+                    <span id="allCardsLoadingSpinner" class="hidden animate-spin h-8 w-8 text-green-600 border-t-2 border-b-2 border-green-600 rounded-full absolute inset-0 m-auto"></span>
+                    <p id="noCardsMessage" class="text-gray-500 text-center w-full">No vocabulary cards added yet. Add some above!</p>
+                </div>
+            </section>
+
+            <!-- Pack Passwords Section -->
+            <section class="mb-10 p-6 bg-purple-50 rounded-lg shadow-inner">
+                <h2 class="text-2xl font-bold text-gray-700 mb-4">Pack Passwords</h2>
+                <div class="flex items-center gap-4 mb-4">
+                    <label for="numPasswordsInput" class="text-gray-700 font-semibold">Generate:</label>
+                    <input type="number" id="numPasswordsInput" min="1" value="1"
+                           class="w-20 p-2 border border-gray-300 rounded-md text-gray-800 text-center">
+                    <button id="generatePasswordsBtn"
+                            class="flex-grow bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-colors duration-200">
+                        Generate Passwords
+                    </button>
+                </div>
+                <h3 class="text-xl font-bold text-gray-700 mb-3">Available Passwords:</h3>
+                <div id="availablePasswordsList" class="min-h-[50px] bg-gray-100 p-3 rounded-md border border-gray-200">
+                    <p id="noAvailablePasswordsMessage" class="text-gray-500 text-sm text-center">No passwords generated yet or all used.</p>
+                </div>
+            </section>
+
+        </div> <!-- End Teacher Only Section -->
+
+        <!-- Shared Sections (Always visible to all users) -->
+        <div id="studentViewSection">
+            <!-- Pack Opening Section -->
+            <section id="packOpeningSection" class="p-6 bg-purple-50 rounded-lg shadow-inner mb-10">
+                <h2 class="text-2xl font-bold text-gray-700 mb-4">Open a Card Pack!</h2>
+                <p class="text-gray-600 mb-4">
+                    Each pack contains 3 random vocabulary cards, with a chance for Uncommon or Rare cards.
+                    Click on a card to reveal it!
+                </p>
+                <button id="openPackBtn"
+                        class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center">
+                    <span id="packLoadingSpinner" class="hidden animate-spin h-5 w-5 mr-3 border-b-2 border-white rounded-full"></span>
+                    Open a Pack
+                </button>
+                <div id="packContainer" class="flex flex-wrap justify-center gap-4 py-4 mt-6 min-h-[200px]">
+                    <p id="noPackMessage" class="text-gray-500 text-center w-full">Open a pack to see your new cards!</p>
+                </div>
+            </section>
+
+            <!-- Collected Cards Section -->
+            <section class="mb-10 p-6 bg-yellow-50 rounded-lg shadow-inner">
+                <h2 class="text-2xl font-bold text-gray-700 mb-4">Your Collected Cards</h2>
+                <div id="collectedCardsContainer" class="flex flex-wrap justify-center gap-4 py-4 min-h-[200px] relative">
+                    <span id="collectedCardsLoadingSpinner" class="hidden animate-spin h-8 w-8 text-yellow-600 border-t-2 border-b-2 border-yellow-600 rounded-full absolute inset-0 m-auto"></span>
+                    <p id="noCollectedCardsMessage" class="text-gray-500 text-center w-full">You haven't collected any cards yet. Open a pack to start!</p>
+                </div>
+            </section>
+        </div> <!-- End Shared Student View Section -->
+
+
+        <!-- Trades Section (Initially hidden) -->
+        <div id="tradesSection" class="hidden">
+            <section class="mb-10 p-6 bg-indigo-50 rounded-lg shadow-inner">
+                <h2 class="text-2xl font-bold text-gray-700 mb-4">Trade Center</h2>
+                <button id="offerNewTradeBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition-colors duration-200 flex items-center justify-center mb-6">
+                    Offer New Trade
+                </button>
+
+                <h3 class="text-xl font-bold text-gray-700 mb-3">Available Trades:</h3>
+                <div id="availableTradesContainer" class="min-h-[150px] bg-gray-100 p-4 rounded-md border border-gray-200">
+                    <p id="noAvailableTradesMessage" class="text-gray-500 text-center w-full">No trade offers currently available.</p>
+                </div>
+            </section>
+        </div>
+
+
+        <!-- Custom Confirmation Modal -->
+        <div id="confirmModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
+            <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm mx-auto">
+                <p id="confirmMessage" class="text-lg text-gray-800 mb-6"></p>
+                <div class="flex justify-end gap-3">
+                    <button id="confirmCancelBtn" class="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-md transition-colors">
+                        Cancel
+                    </button>
+                    <button id="confirmOkBtn" class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md transition-colors">
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Full Card Display Modal -->
+    <div id="fullCardModal" class="full-card-modal hidden">
+        <div id="fullCardContent" class="full-card-content">
+            <button id="fullCardCloseBtn" class="full-card-close-btn">&times;</button>
+            <div id="fullCardWord" class="full-card-word"></div>
+            <div id="fullCardDefinition" class="full-card-definition"></div>
+            <div id="fullCardRarity" class="full-card-rarity"></div>
+        </div>
+    </div>
+
+    <!-- Password Input Modal (for students opening packs) -->
+    <div id="passwordInputModal" class="password-modal hidden">
+        <div class="password-modal-content">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Enter Pack Password</h3>
+            <input type="text" id="packPasswordInput" class="password-input" placeholder="Enter password">
+            <div class="password-modal-actions">
+                <button id="packPasswordOpenBtn" class="open-pack-btn">Open Pack</button>
+                <button id="packPasswordCancelBtn" class="cancel-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Teacher Password Input Modal -->
+    <div id="teacherPasswordModal" class="password-modal hidden">
+        <div class="password-modal-content">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 text-red-700">Teacher Login</h3>
+            <input type="password" id="teacherPasswordInput" class="password-input" placeholder="Enter teacher password">
+            <div class="password-modal-actions">
+                <button id="teacherPasswordLoginBtn" class="open-pack-btn bg-red-600 hover:bg-red-700">Login</button>
+                <button id="teacherPasswordCancelBtn" class="cancel-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Offer Trade Modal -->
+    <div id="offerTradeModal" class="password-modal hidden"> <!-- Reusing password-modal styles for backdrop/centering -->
+        <div class="password-modal-content max-w-2xl w-full text-left">
+            <h3 class="text-xl font-bold text-gray-800 mb-4 text-indigo-700">Offer New Trade</h3>
+            
+            <div class="mb-4">
+                <h4 class="text-lg font-semibold text-gray-700 mb-2">Cards I'm Offering (Select from your collection):</h4>
+                <div id="offeringCardsSelector" class="trade-card-selector">
+                    <p class="text-gray-500 text-center w-full">No cards in your collection to offer.</p>
+                </div>
+            </div>
+
+            <div class="mb-6">
+                <h4 class="text-lg font-semibold text-gray-700 mb-2">Cards I Want (Select from all vocabulary):</h4>
+                <div id="wantingCardsSelector" class="trade-card-selector">
+                    <p class="text-gray-500 text-center w-full">No vocabulary words loaded.</p>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3">
+                <button id="submitTradeOfferBtn" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg shadow-md transition-colors duration-200">
+                    Submit Offer
+                </button>
+                <button id="cancelOfferTradeBtn" class="px-6 py-3 bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold rounded-lg shadow-md transition-colors duration-200">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Toast Container for messages -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Firebase CDN -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, updateDoc, deleteDoc, increment, where, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // Global Firebase variables
+        let db;
+        let auth;
+        let userId = null;
+        let vocabularyWords = []; // Array to store all vocabulary card objects (master list, from teacher)
+        let collectedCards = []; // Array to store collected cards for the current user
+        let pendingWords = []; // Temporary storage for words added before saving to DB
+        let availablePackPasswords = []; // Array to store available pack passwords
+        let currentTradeOffers = []; // Array to store current trade offers from Firestore
+        let isTeacherMode = false; // Flag to track teacher mode
+
+        // Global UI elements
+        const saveAllVocabularyBtn = document.getElementById('saveAllVocabularyBtn');
+        const addWordToListBtn = document.getElementById('addWordToListBtn');
+        const openPackBtn = document.getElementById('openPackBtn');
+        const wordInput = document.getElementById('wordInput');
+        const definitionInput = document.getElementById('definitionInput');
+        const raritySelect = document.getElementById('raritySelect');
+        const pendingWordsList = document.getElementById('pendingWordsList');
+        const noPendingWordsMessage = document.getElementById('noPendingWordsMessage');
+
+        const allCardsContainer = document.getElementById('allCardsContainer');
+        const packContainer = document.getElementById('packContainer');
+        const noCardsMessage = document.getElementById('noCardsMessage');
+        const noPackMessage = document.getElementById('noPackMessage');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+
+        const saveLoadingSpinner = document.getElementById('saveLoadingSpinner');
+        const allCardsLoadingSpinner = document.getElementById('allCardsLoadingSpinner');
+        const packLoadingSpinner = document.getElementById('packLoadingSpinner');
+        const collectedCardsLoadingSpinner = document.getElementById('collectedCardsLoadingSpinner');
+
+        const showManageVocabBtn = document.getElementById('showManageVocabBtn');
+        const showCollectedCardsBtn = document.getElementById('showCollectedCardsBtn');
+        const showTradesBtn = document.getElementById('showTradesBtn'); // New Trades button
+        const showStudentViewBtn = document.getElementById('showStudentViewBtn');
+        const teacherOnlySection = document.getElementById('teacherOnlySection');
+        const studentViewSection = document.getElementById('studentViewSection'); // Section for student view content
+        const collectedCardsSection = document.getElementById('collectedCardsSection');
+        const collectedCardsContainer = document.getElementById('collectedCardsContainer');
+        const noCollectedCardsMessage = document.getElementById('noCollectedCardsMessage');
+
+        const teacherLoginBtn = document.getElementById('teacherLoginBtn');
+
+        // Pack Password elements
+        const numPasswordsInput = document.getElementById('numPasswordsInput');
+        const generatePasswordsBtn = document.getElementById('generatePasswordsBtn');
+        const availablePasswordsList = document.getElementById('availablePasswordsList');
+        const noAvailablePasswordsMessage = document.getElementById('noAvailablePasswordsMessage');
+
+        // Full Card Modal elements
+        const fullCardModal = document.getElementById('fullCardModal');
+        const fullCardContent = document.getElementById('fullCardContent');
+        const fullCardCloseBtn = document.getElementById('fullCardCloseBtn');
+        const fullCardWord = document.getElementById('fullCardWord');
+        const fullCardDefinition = document.getElementById('fullCardDefinition');
+        const fullCardRarity = document.getElementById('fullCardRarity');
+
+        // Password Input Modal elements (for students opening packs)
+        const passwordInputModal = document.getElementById('passwordInputModal');
+        const packPasswordInput = document.getElementById('packPasswordInput');
+        const packPasswordOpenBtn = document.getElementById('packPasswordOpenBtn');
+        const packPasswordCancelBtn = document.getElementById('packPasswordCancelBtn');
+
+        // Teacher Password Input Modal elements
+        const teacherPasswordModal = document.getElementById('teacherPasswordModal');
+        const teacherPasswordInput = document.getElementById('teacherPasswordInput');
+        const teacherPasswordLoginBtn = document.getElementById('teacherPasswordLoginBtn');
+        const teacherPasswordCancelBtn = document.getElementById('teacherPasswordCancelBtn');
+
+        const TEACHER_PASSWORD = 'teachervocab'; // Hardcoded teacher password
+
+        // Trade Section elements
+        const tradesSection = document.getElementById('tradesSection');
+        const offerNewTradeBtn = document.getElementById('offerNewTradeBtn');
+        const availableTradesContainer = document.getElementById('availableTradesContainer');
+        const noAvailableTradesMessage = document.getElementById('noAvailableTradesMessage');
+
+        // Offer Trade Modal elements
+        const offerTradeModal = document.getElementById('offerTradeModal');
+        const offeringCardsSelector = document.getElementById('offeringCardsSelector');
+        const wantingCardsSelector = document.getElementById('wantingCardsSelector');
+        const submitTradeOfferBtn = document.getElementById('submitTradeOfferBtn');
+        const cancelOfferTradeBtn = document.getElementById('cancelOfferTradeBtn');
+
+        let selectedOfferingCards = []; // Array to hold card objects the user is offering
+        let selectedWantingCards = []; // Array to hold card objects the user is requesting
+
+
+        // Rarity probabilities for drawing cards
+        const rarityProbabilities = {
+            'Rare': 0.10,     // 10% chance
+            'Uncommon': 0.30, // 30% chance
+            'Common': 0.60    // 60% chance
+        };
+
+        // --- Utility Functions ---
+
+        /**
+         * Generates a random alphanumeric string of a given length.
+         * @param {number} length - The desired length of the string.
+         * @returns {string} The random string.
+         */
+        function generateRandomString(length) {
+            const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            const charactersLength = characters.length;
+            for (let i = 0; i < length; i++) {
+                result += characters.charAt(Math.floor(Math.random() * charactersLength));
+            }
+            return result;
+        }
+
+        /**
+         * Displays a loading spinner and disables a button.
+         * @param {HTMLElement} spinnerElement The spinner element.
+         * @param {HTMLElement} buttonElement The button element to disable.
+         */
+        function showLoading(spinnerElement, buttonElement) {
+            spinnerElement.classList.remove('hidden');
+            if (buttonElement) { // buttonElement might be null for non-button specific spinners
+                buttonElement.disabled = true;
+                buttonElement.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        /**
+         * Hides a loading spinner and enables a button.
+         * @param {HTMLElement} spinnerElement The spinner element.
+         * @param {HTMLElement} buttonElement The button element to enable.
+         */
+        function hideLoading(spinnerElement, buttonElement) {
+            spinnerElement.classList.add('hidden');
+            if (buttonElement) {
+                buttonElement.disabled = false;
+                buttonElement.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        /**
+         * Shows a temporary toast message.
+         * @param {string} message The message to display.
+         * @param {boolean} isError If true, displays as an error toast.
+         */
+        function showToast(message, isError = false) {
+            const toastContainer = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${isError ? 'error' : ''}`;
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+
+            // Trigger reflow to ensure transition works
+            void toast.offsetWidth;
+            toast.classList.add('show');
+
+            setTimeout(() => {
+                toast.classList.remove('show');
+                toast.addEventListener('transitionend', () => toast.remove(), { once: true });
+            }, 3000); // Hide after 3 seconds
+        }
+
+        // --- Custom Confirmation Modal Functions ---
+        const confirmModal = document.getElementById('confirmModal');
+        const confirmMessage = document.getElementById('confirmMessage');
+        const confirmOkBtn = document.getElementById('confirmOkBtn');
+        const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+
+        let confirmCallback = null;
+
+        /**
+         * Shows a custom confirmation modal.
+         * @param {string} message The message to display in the modal.
+         * @param {Function} onConfirm Callback function to execute if confirmed.
+         * @param {string} [okText='OK'] Text for the OK button.
+         * @param {string} [cancelText='Cancel'] Text for the Cancel button.
+         */
+        function showConfirmModal(message, onConfirm, okText = 'Delete', cancelText = 'Cancel') {
+            confirmMessage.textContent = message;
+            confirmOkBtn.textContent = okText;
+            confirmCancelBtn.textContent = cancelText;
+            confirmCallback = onConfirm;
+            confirmModal.classList.remove('hidden');
+        }
+
+        function hideConfirmModal() {
+            confirmModal.classList.add('hidden');
+            confirmCallback = null; // Clear callback
+        }
+
+        confirmOkBtn.addEventListener('click', () => {
+            if (confirmCallback) {
+                confirmCallback();
+            }
+            hideConfirmModal();
+        });
+
+        confirmCancelBtn.addEventListener('click', () => {
+            hideConfirmModal();
+        });
+
+        // --- Full Card Modal Functions ---
+        /**
+         * Shows the full card modal with the given card data.
+         * @param {object} cardData - The data of the card to display.
+         */
+        function showFullCardModal(cardData) {
+            fullCardWord.textContent = cardData.word;
+            fullCardDefinition.textContent = cardData.definition;
+            fullCardRarity.textContent = cardData.rarity;
+
+            // Apply rarity class to the content div for border color
+            fullCardContent.className = 'full-card-content'; // Reset
+            fullCardContent.classList.add(cardData.rarity.toLowerCase());
+            fullCardRarity.className = `full-card-rarity rarity-${cardData.rarity.toLowerCase()}`;
+
+            fullCardModal.classList.remove('hidden');
+            // Trigger reflow for transition
+            void fullCardModal.offsetWidth;
+            fullCardModal.classList.add('show');
+        }
+
+        /**
+         * Hides the full card modal.
+         */
+        function hideFullCardModal() {
+            fullCardModal.classList.remove('show');
+            fullCardModal.addEventListener('transitionend', () => {
+                fullCardModal.classList.add('hidden');
+            }, { once: true });
+        }
+        fullCardCloseBtn.addEventListener('click', hideFullCardModal);
+
+        // --- Password Input Modal Functions (for students opening packs) ---
+        /**
+         * Shows the password input modal.
+         */
+        function showPasswordInputModal() {
+            packPasswordInput.value = ''; // Clear previous input
+            passwordInputModal.classList.remove('hidden');
+            void passwordInputModal.offsetWidth; // Trigger reflow
+            passwordInputModal.classList.add('show');
+            packPasswordInput.focus(); // Focus on the input field
+        }
+
+        /**
+         * Hides the password input modal.
+         */
+        function hidePasswordInputModal() {
+            passwordInputModal.classList.remove('show');
+            passwordInputModal.addEventListener('transitionend', () => {
+                passwordInputModal.classList.add('hidden');
+            }, { once: true });
+        }
+        packPasswordCancelBtn.addEventListener('click', hidePasswordInputModal);
+        packPasswordOpenBtn.addEventListener('click', async () => {
+            const enteredPassword = packPasswordInput.value.trim();
+            if (enteredPassword) {
+                await verifyAndOpenPack(enteredPassword);
+            } else {
+                showToast("Please enter a password.", true);
+            }
+        });
+
+        // --- Teacher Password Input Modal Functions ---
+        /**
+         * Shows the teacher password input modal.
+         */
+        function showTeacherPasswordModal() {
+            teacherPasswordInput.value = ''; // Clear previous input
+            teacherPasswordModal.classList.remove('hidden');
+            void teacherPasswordModal.offsetWidth; // Trigger reflow
+            teacherPasswordModal.classList.add('show');
+            teacherPasswordInput.focus(); // Focus on the input field
+        }
+
+        /**
+         * Hides the teacher password input modal.
+         */
+        function hideTeacherPasswordModal() {
+            teacherPasswordModal.classList.remove('show');
+            teacherPasswordModal.addEventListener('transitionend', () => {
+                teacherPasswordModal.classList.add('hidden');
+            }, { once: true });
+        }
+        teacherPasswordCancelBtn.addEventListener('click', hideTeacherPasswordModal);
+        teacherPasswordLoginBtn.addEventListener('click', () => {
+            const enteredPassword = teacherPasswordInput.value.trim();
+            if (enteredPassword === TEACHER_PASSWORD) {
+                isTeacherMode = true;
+                showToast("Teacher mode activated!");
+                teacherLoginBtn.classList.add('hidden'); // Hide login button
+                showStudentViewBtn.classList.remove('hidden'); // Show student view button
+                hideTeacherPasswordModal();
+                // Automatically switch to manage vocab view for teacher
+                teacherOnlySection.classList.remove('hidden');
+                studentViewSection.classList.add('hidden'); // Hide student view section
+                tradesSection.classList.add('hidden'); // Also hide trades section
+
+                // Enable teacher-specific buttons
+                saveAllVocabularyBtn.disabled = false;
+                addWordToListBtn.disabled = false;
+                generatePasswordsBtn.disabled = false; // Enable password generation
+                loadPackPasswords(); // Load passwords when teacher logs in
+            } else {
+                showToast("Incorrect password.", true);
+                // Optionally clear the password field on incorrect attempt
+                teacherPasswordInput.value = '';
+                teacherPasswordInput.focus();
+            }
+        });
+
+
+        /**
+         * Creates an HTML element for a single vocabulary card.
+         * @param {object} cardData - Object containing word, definition, rarity, and potentially count.
+         * @param {boolean} isManagedCard - True if it's a card in the teacher's vocabulary list (shows delete button, always face up).
+         * @param {boolean} isPackCard - True if it's a card being opened in a pack (initially upside down, click to flip).
+         * @param {number} [count=1] - The number of duplicates for this card, only relevant for collected cards.
+         * @param {boolean} [isTradeSelectorItem=false] - True if this is for the trade selection modal.
+         * @returns {HTMLElement} The created card element.
+         */
+        function createCardElement(cardData, isManagedCard, isPackCard = false, count = 1, isTradeSelectorItem = false) {
+            const cardContainer = document.createElement('div');
+            // Use cardData.id only if available, otherwise generate a unique key
+            const cardId = cardData.id || `card-${Math.random().toString(36).substr(2, 9)}`;
+            cardContainer.setAttribute('data-id', cardId); // Store Firestore doc ID for potential future use
+
+            if (isTradeSelectorItem) {
+                cardContainer.classList.add('card-item');
+                // Store full card data as a JSON string for easy retrieval when selected
+                cardContainer.dataset.cardData = JSON.stringify(cardData);
+                // Add click listener for selection
+                cardContainer.addEventListener('click', (e) => {
+                    if (cardContainer.classList.contains('disabled')) return; // Cannot select disabled cards
+
+                    const cardJson = cardContainer.dataset.cardData;
+                    if (!cardJson) return;
+                    const card = JSON.parse(cardJson);
+
+                    let targetArray = e.currentTarget.closest('#offeringCardsSelector') ? selectedOfferingCards : selectedWantingCards;
+                    
+                    const existingIndex = targetArray.findIndex(c => c.id === card.id);
+
+                    if (existingIndex > -1) {
+                        targetArray.splice(existingIndex, 1); // Deselect
+                        cardContainer.classList.remove('selected');
+                    } else {
+                        // For offering cards, ensure the count isn't exceeded
+                        if (e.currentTarget.closest('#offeringCardsSelector')) {
+                            const currentCountInSelection = targetArray.filter(c => c.id === card.id).length;
+                            const availableCount = collectedCards.find(c => c.id === card.id)?.count || 0;
+                            if (currentCountInSelection >= availableCount) {
+                                showToast(`You only have ${availableCount} of this card.`, true);
+                                return;
+                            }
+                        }
+                        targetArray.push(card); // Select
+                        cardContainer.classList.add('selected');
+                    }
+                });
+
+                // Display simplified card for selection
+                cardContainer.innerHTML = `
+                    <div class="card-word">${cardData.word}</div>
+                    <div class="card-rarity rarity-${cardData.rarity.toLowerCase()}">${cardData.rarity}</div>
+                    ${(isTradeSelectorItem && cardData.count !== undefined) ? `<div class="card-count-label">x${cardData.count}</div>` : ''}
+                `;
+                return cardContainer; // Return early for trade selector items
+            }
+
+
+            // Normal card rendering below for packs, collected, and managed views
+            cardContainer.className = `card-container ${isPackCard ? 'flipped' : ''}`;
+
+            const cardInner = document.createElement('div');
+            cardInner.className = 'card-inner';
+            cardContainer.appendChild(cardInner);
+
+            const cardFront = document.createElement('div');
+            cardFront.className = `card-front ${cardData.rarity.toLowerCase()}`;
+            cardInner.appendChild(cardFront);
+
+            const cardBack = document.createElement('div');
+            cardBack.className = 'card-back';
+            cardBack.innerHTML = '<span class="text-6xl select-none">?</span>';
+            cardInner.appendChild(cardBack);
+
+
+            const rarityColorClass = `rarity-${cardData.rarity.toLowerCase()}`;
+
+            const rarityLabel = document.createElement('div');
+            rarityLabel.className = `text-sm font-bold ${rarityColorClass} absolute top-2 left-2 px-2 py-1 bg-white rounded-md shadow-sm`;
+            rarityLabel.textContent = cardData.rarity;
+            cardFront.appendChild(rarityLabel);
+
+            const wordContent = document.createElement('div');
+            wordContent.className = `word-content mt-6 flex-grow flex items-center justify-center text-center text-gray-900`;
+            wordContent.textContent = cardData.word;
+            cardFront.appendChild(wordContent);
+
+            const definitionContent = document.createElement('div');
+            definitionContent.className = `card-definition mt-2 text-gray-700`;
+            definitionContent.textContent = cardData.definition;
+            cardFront.appendChild(definitionContent);
+
+
+            if (isManagedCard) {
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = `absolute bottom-2 right-2 p-1 bg-red-500 hover:bg-red-600 text-white rounded-full text-xs opacity-80 hover:opacity-100 transition-opacity`;
+                deleteBtn.innerHTML = `&times;`;
+                deleteBtn.title = `Delete "${cardData.word}"`;
+                deleteBtn.onclick = async (e) => {
+                    e.stopPropagation();
+                    showConfirmModal(`Are you sure you want to delete the word "${cardData.word}"?`, async () => {
+                        await deleteVocabularyWord(cardData.id);
+                    });
+                };
+                cardFront.appendChild(deleteBtn);
+            } else if (count > 1) {
+                const cardCount = document.createElement('div');
+                cardCount.className = 'card-count';
+                cardCount.textContent = `x${count}`;
+                cardFront.appendChild(cardCount);
+            }
+
+            if (isPackCard) {
+                cardContainer.addEventListener('click', () => {
+                    cardContainer.classList.toggle('flipped');
+                });
+            } else if (!isManagedCard) {
+                cardContainer.addEventListener('click', () => {
+                    showFullCardModal(cardData);
+                });
+            }
+
+            return cardContainer;
+        }
+
+
+        /**
+         * Renders all vocabulary cards stored in the `vocabularyWords` array.
+         */
+        function renderAllCards() {
+            allCardsContainer.innerHTML = ''; // Clear previous cards
+            if (vocabularyWords.length === 0) {
+                noCardsMessage.classList.remove('hidden');
+                return;
+            }
+            noCardsMessage.classList.add('hidden');
+            vocabularyWords.forEach(word => {
+                // Managed cards are always face up and have a delete button
+                allCardsContainer.appendChild(createCardElement(word, true, false));
+            });
+        }
+
+        /**
+         * Renders all collected cards stored in the `collectedCards` array.
+         */
+        function renderCollectedCards() {
+            collectedCardsContainer.innerHTML = ''; // Clear previous cards
+            if (collectedCards.length === 0) {
+                noCollectedCardsMessage.classList.remove('hidden');
+                return;
+            }
+            noCollectedCardsMessage.classList.add('hidden');
+            collectedCards.forEach(card => {
+                // Collected cards are always face up and do not have a delete button.
+                // Pass the count from the collected card data.
+                collectedCardsContainer.appendChild(createCardElement(card, false, false, card.count));
+            });
+        }
+
+        /**
+         * Renders the list of available (unused) pack passwords.
+         */
+        function renderAvailablePasswords() {
+            availablePasswordsList.innerHTML = '';
+            const unusedPasswords = availablePackPasswords.filter(p => !p.used);
+
+            if (unusedPasswords.length === 0) {
+                noAvailablePasswordsMessage.classList.remove('hidden');
+                return;
+            }
+            noAvailablePasswordsMessage.classList.add('hidden');
+
+            unusedPasswords.forEach(pass => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'password-list-item';
+                itemDiv.innerHTML = `
+                    <span>${pass.password}</span>
+                    <button class="delete-btn" data-id="${pass.id}">&times;</button>
+                `;
+                availablePasswordsList.appendChild(itemDiv);
+            });
+
+            availablePasswordsList.querySelectorAll('.delete-btn').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    const passwordIdToDelete = e.target.dataset.id;
+                    await deletePackPassword(passwordIdToDelete);
+                });
+            });
+        }
+
+        /**
+         * Renders the current trade offers in the availableTradesContainer.
+         */
+        function renderTradeOffers() {
+            availableTradesContainer.innerHTML = ''; // Clear previous offers
+            const activeTrades = currentTradeOffers.filter(trade => trade.status === 'pending' && trade.offeringUserId !== userId);
+
+            if (activeTrades.length === 0) {
+                noAvailableTradesMessage.classList.remove('hidden');
+                return;
+            }
+            noAvailableTradesMessage.classList.add('hidden');
+
+            activeTrades.forEach(trade => {
+                const tradeDiv = document.createElement('div');
+                tradeDiv.className = 'trade-offer-item';
+                tradeDiv.innerHTML = `
+                    <div class="trade-header">Trade Offer by User ID: ${trade.offeringUserId.substring(0, 8)}...</div>
+                    <div class="trade-details">
+                        <div class="trade-col">
+                            <h4>Offering:</h4>
+                            <ul class="trade-card-list">
+                                ${trade.offeredCards.map(card => `<li>${card.word} (<span class="rarity rarity-${card.rarity.toLowerCase()}">${card.rarity}</span>) x${card.count}</li>`).join('')}
+                            </ul>
+                        </div>
+                        <div class="trade-col">
+                            <h4>Requesting:</h4>
+                            <ul class="trade-card-list">
+                                ${trade.requestedCards.map(card => `<li>${card.word} (<span class="rarity rarity-${card.rarity.toLowerCase()}">${card.rarity}</span>) x${card.count}</li>`).join('')}
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="trade-actions">
+                        <button class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-md transition-colors accept-trade-btn" data-trade-id="${trade.id}">Accept Trade</button>
+                        ${trade.offeringUserId === userId ? `<button class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-md transition-colors cancel-own-trade-btn" data-trade-id="${trade.id}">Cancel My Offer</button>` : ''}
+                    </div>
+                `;
+                availableTradesContainer.appendChild(tradeDiv);
+            });
+
+            // Add event listeners for trade acceptance (logic for this will be added later)
+            availableTradesContainer.querySelectorAll('.accept-trade-btn').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    const tradeId = e.target.dataset.tradeId;
+                    showToast(`Accepting trade ${tradeId} (logic coming soon!)`, false);
+                    // Actual acceptTrade logic will go here
+                });
+            });
+
+            // Add event listeners for canceling own trade offers
+            availableTradesContainer.querySelectorAll('.cancel-own-trade-btn').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    const tradeId = e.target.dataset.tradeId;
+                    showConfirmModal(`Are you sure you want to cancel your trade offer?`, async () => {
+                        await cancelTradeOffer(tradeId);
+                    });
+                });
+            });
+        }
+
+
+        /**
+         * Adds a word to the pending list for saving.
+         */
+        function addWordToPendingList() {
+            const word = wordInput.value.trim();
+            const definition = definitionInput.value.trim();
+            const rarity = raritySelect.value;
+
+            if (!word || !definition) {
+                showToast("Please enter both a word and its definition.", true);
+                return;
+            }
+
+            // Check for duplicate word in pending list
+            if (pendingWords.some(item => item.word.toLowerCase() === word.toLowerCase())) {
+                showToast(`"${word}" is already in the pending list.`, true);
+                return;
+            }
+
+            // Check for duplicate word in already saved vocabulary
+            if (vocabularyWords.some(item => item.word.toLowerCase() === word.toLowerCase())) {
+                 showToast(`"${word}" already exists in your saved vocabulary. Please update it directly if needed.`, true);
+                return;
+            }
+
+            const newWord = { word, definition, rarity };
+            pendingWords.push(newWord);
+            renderPendingWords();
+
+            // Clear input fields
+            wordInput.value = '';
+            definitionInput.value = '';
+            raritySelect.value = 'Common'; // Reset to default
+            showToast(`"${word}" added to pending list.`);
+        }
+
+        /**
+         * Renders the list of words currently in the pendingWords array.
+         */
+        function renderPendingWords() {
+            pendingWordsList.innerHTML = ''; // Clear previous items
+            if (pendingWords.length === 0) {
+                noPendingWordsMessage.classList.remove('hidden');
+                saveAllVocabularyBtn.disabled = true; // Disable save button if no pending words
+                return;
+            }
+            noPendingWordsMessage.classList.add('hidden');
+            saveAllVocabularyBtn.disabled = false; // Enable save button
+
+            pendingWords.forEach((item, index) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'pending-word-item';
+                itemDiv.innerHTML = `
+                    <span>${item.word} (${item.rarity})</span>
+                    <button class="remove-btn" data-index="${index}">&times;</button>
+                `;
+                pendingWordsList.appendChild(itemDiv);
+            });
+
+            // Add event listeners to remove buttons
+            pendingWordsList.querySelectorAll('.remove-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const indexToRemove = parseInt(e.target.dataset.index);
+                    pendingWords.splice(indexToRemove, 1);
+                    renderPendingWords();
+                    showToast("Word removed from pending list.");
+                });
+            });
+        }
+
+        /**
+         * Selects a random card based on rarity probabilities.
+         * @param {Array} availableCards - The pool of cards to draw from.
+         * @returns {object|null} A randomly selected card object, or null if no cards are available.
+         */
+        function selectRandomCardByRarity(availableCards) {
+            if (availableCards.length === 0) return null;
+
+            let selectedRarity = null;
+            let rand = Math.random();
+
+            // Determine rarity based on probabilities
+            if (rand < rarityProbabilities['Rare']) {
+                selectedRarity = 'Rare';
+            } else if (rand < (rarityProbabilities['Rare'] + rarityProbabilities['Uncommon'])) {
+                selectedRarity = 'Uncommon';
+            } else {
+                selectedRarity = 'Common';
+            }
+
+            // Try to find a card of the selected rarity
+            let cardsOfSelectedRarity = availableCards.filter(card => card.rarity === selectedRarity);
+
+            // If no cards of the selected rarity exist in the available pool,
+            // then fall back to picking ANY card from the available pool randomly.
+            if (cardsOfSelectedRarity.length === 0) {
+                const randomIndex = Math.floor(Math.random() * availableCards.length);
+                return availableCards[randomIndex];
+            } else {
+                // If cards of the selected rarity exist, pick one of them randomly.
+                const randomIndex = Math.floor(Math.random() * cardsOfSelectedRarity.length);
+                return cardsOfSelectedRarity[randomIndex];
+            }
+        }
+
+        // --- Firebase Functions ---
+
+        /**
+         * Initializes Firebase and sets up authentication.
+         */
+        async function initializeFirebase() {
+            try {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        userIdDisplay.textContent = `User ID: ${userId}`;
+                        await loadVocabulary(); // Load vocab once authenticated
+                        await loadCollectedCards(); // Load collected cards once authenticated
+                        await loadTradeOffers(); // Load trade offers for all users
+
+                        // Initial button states for student view
+                        saveAllVocabularyBtn.disabled = true;
+                        addWordToListBtn.disabled = true;
+                        openPackBtn.disabled = false;
+                        showManageVocabBtn.disabled = false;
+                        showCollectedCardsBtn.disabled = false;
+                        showTradesBtn.disabled = false; // Enable trades button
+                        showStudentViewBtn.disabled = false;
+                        generatePasswordsBtn.disabled = true; // Disabled until teacher logs in
+                        
+                        renderPendingWords();
+                    } else {
+                        try {
+                            const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                            if (initialAuthToken) {
+                                await signInWithCustomToken(auth, initialAuthToken);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (error) {
+                            console.error("Error during anonymous sign-in or custom token sign-in:", error);
+                            showToast("Authentication failed. Please refresh.", true);
+                            userIdDisplay.textContent = "Authentication failed.";
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Error initializing Firebase:", error);
+                showToast("Failed to initialize Firebase. Check console for details.", true);
+            }
+        }
+
+        /**
+         * Saves all pending vocabulary words to Firestore.
+         */
+        async function saveAllVocabulary() {
+            if (!userId) {
+                showToast("User not authenticated. Please wait...", true);
+                return;
+            }
+            if (pendingWords.length === 0) {
+                showToast("No words to save. Add words to the list first!", true);
+                return;
+            }
+            if (!isTeacherMode) {
+                 showToast("You must be logged in as a teacher to save vocabulary.", true);
+                 return;
+            }
+
+            showLoading(saveLoadingSpinner, saveAllVocabularyBtn);
+            let savedCount = 0;
+
+            try {
+                for (const item of pendingWords) {
+                    const existingDoc = vocabularyWords.find(v => v.word.toLowerCase() === item.word.toLowerCase());
+                    const docRef = existingDoc 
+                        ? doc(db, `artifacts/${__app_id}/users/${userId}/vocabulary_cards`, existingDoc.id) 
+                        : doc(collection(db, `artifacts/${__app_id}/users/${userId}/vocabulary_cards`));
+                    
+                    await setDoc(docRef, { word: item.word, definition: item.definition, rarity: item.rarity });
+                    savedCount++;
+                }
+                pendingWords = [];
+                renderPendingWords();
+                showToast(`${savedCount} vocabulary word(s) saved successfully!`);
+            } catch (error) {
+                console.error("Error saving all vocabulary:", error);
+                showToast("Failed to save all vocabulary.", true);
+            } finally {
+                hideLoading(saveLoadingSpinner, saveAllVocabularyBtn);
+            }
+        }
+
+        /**
+         * Deletes a vocabulary word from Firestore.
+         * @param {string} cardId The ID of the card to delete.
+         */
+        async function deleteVocabularyWord(cardId) {
+            if (!userId) {
+                showToast("User not authenticated. Please wait...", true);
+                return;
+            }
+            if (!isTeacherMode) {
+                showToast("You must be logged in as a teacher to delete vocabulary.", true);
+                return;
+            }
+            try {
+                const docRef = doc(db, `artifacts/${__app_id}/users/${userId}/vocabulary_cards`, cardId);
+                await deleteDoc(docRef);
+                showToast("Card deleted successfully!");
+            } catch (error) {
+                console.error("Error deleting card:", error);
+                showToast("Failed to delete card.", true);
+            }
+        }
+
+
+        /**
+         * Loads vocabulary words from Firestore and sets up a real-time listener.
+         */
+        async function loadVocabulary() {
+            if (!userId) return;
+            showLoading(allCardsLoadingSpinner, saveAllVocabularyBtn);
+            showLoading(allCardsLoadingSpinner, openPackBtn);
+
+            try {
+                const q = collection(db, `artifacts/${__app_id}/users/${userId}/vocabulary_cards`);
+                onSnapshot(q, (snapshot) => {
+                    vocabularyWords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderAllCards();
+                    hideLoading(allCardsLoadingSpinner, saveAllVocabularyBtn);
+                    hideLoading(allCardsLoadingSpinner, openPackBtn);
+                }, (error) => {
+                    console.error("Error getting real-time vocabulary updates:", error);
+                    showToast("Failed to load vocabulary updates.", true);
+                    hideLoading(allCardsLoadingSpinner, saveAllVocabularyBtn);
+                    hideLoading(allCardsLoadingSpinner, openPackBtn);
+                });
+            } catch (error) {
+                console.error("Error setting up vocabulary listener:", error);
+                showToast("Failed to initialize vocabulary loading.", true);
+                hideLoading(allCardsLoadingSpinner, saveAllVocabularyBtn);
+                hideLoading(allCardsLoadingSpinner, openPackBtn);
+            }
+        }
+
+        /**
+         * Loads collected cards from Firestore for the current user and sets up a real-time listener.
+         */
+        async function loadCollectedCards() {
+            if (!userId) return;
+            showLoading(collectedCardsLoadingSpinner, null);
+
+            try {
+                const q = collection(db, `artifacts/${__app_id}/users/${userId}/collected_cards`);
+                onSnapshot(q, (snapshot) => {
+                    collectedCards = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderCollectedCards();
+                    hideLoading(collectedCardsLoadingSpinner, null);
+                }, (error) => {
+                    console.error("Error getting real-time collected card updates:", error);
+                    showToast("Failed to load collected card updates.", true);
+                    hideLoading(collectedCardsLoadingSpinner, null);
+                });
+            } catch (error) {
+                console.error("Error setting up collected cards listener:", error);
+                showToast("Failed to initialize collected cards loading.", true);
+                hideLoading(collectedCardsLoadingSpinner, null);
+            }
+        }
+
+        /**
+         * Generates new pack passwords and saves them to Firestore.
+         */
+        async function generatePackPasswords() {
+            if (!userId || !isTeacherMode) {
+                showToast("You must be logged in as a teacher to generate passwords.", true);
+                return;
+            }
+            const numToGenerate = parseInt(numPasswordsInput.value);
+            if (isNaN(numToGenerate) || numToGenerate <= 0) {
+                showToast("Please enter a valid number of passwords to generate.", true);
+                return;
+            }
+
+            showLoading(generatePasswordsBtn, generatePasswordsBtn);
+            try {
+                for (let i = 0; i < numToGenerate; i++) {
+                    const newPassword = generateRandomString(6);
+                    const passwordDocRef = doc(collection(db, `artifacts/${__app_id}/users/${userId}/pack_passwords`));
+                    await setDoc(passwordDocRef, {
+                        password: newPassword,
+                        used: false,
+                        timestamp: new Date()
+                    });
+                }
+                showToast(`${numToGenerate} password(s) generated successfully!`);
+                numPasswordsInput.value = '1';
+            } catch (error) {
+                console.error("Error generating passwords:", error);
+                showToast("Failed to generate passwords.", true);
+            } finally {
+                hideLoading(generatePasswordsBtn, generatePasswordsBtn);
+            }
+        }
+
+        /**
+         * Loads pack passwords from Firestore and sets up a real-time listener.
+         */
+        async function loadPackPasswords() {
+            if (!userId || !isTeacherMode) return;
+
+            try {
+                const q = collection(db, `artifacts/${__app_id}/users/${userId}/pack_passwords`);
+                onSnapshot(q, (snapshot) => {
+                    availablePackPasswords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderAvailablePasswords();
+                }, (error) => {
+                    console.error("Error getting real-time password updates:", error);
+                    showToast("Failed to load password updates.", true);
+                });
+            } catch (error) {
+                console.error("Error setting up password listener:", error);
+                showToast("Failed to initialize password loading.", true);
+            }
+        }
+
+        /**
+         * Deletes a pack password from Firestore.
+         * @param {string} passwordId - The ID of the password document to delete.
+         */
+        async function deletePackPassword(passwordId) {
+            if (!userId || !isTeacherMode) {
+                showToast("You must be logged in as a teacher to delete passwords.", true);
+                return;
+            }
+            try {
+                const docRef = doc(db, `artifacts/${__app_id}/users/${userId}/pack_passwords`, passwordId);
+                await deleteDoc(docRef);
+                showToast("Password deleted successfully!");
+            } catch (error) {
+                console.error("Error deleting password:", error);
+                showToast("Failed to delete password.", true);
+            }
+        }
+
+        /**
+         * Verifies the entered password and, if valid, opens a pack.
+         * @param {string} enteredPassword - The password entered by the student.
+         */
+        async function verifyAndOpenPack(enteredPassword) {
+            if (!userId) {
+                showToast("User not authenticated. Please wait...", true);
+                return;
+            }
+
+            packPasswordOpenBtn.disabled = true;
+            packPasswordOpenBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            try {
+                const q = query(
+                    collection(db, `artifacts/${__app_id}/users/${userId}/pack_passwords`),
+                    where("password", "==", enteredPassword),
+                    where("used", "==", false)
+                );
+                const querySnapshot = await getDocs(q);
+
+                if (querySnapshot.docs.length > 0) {
+                    const passwordDoc = querySnapshot.docs[0];
+                    const passwordDocRef = doc(db, `artifacts/${__app_id}/users/${userId}/pack_passwords`, passwordDoc.id);
+
+                    await updateDoc(passwordDocRef, { used: true, usedBy: userId, usedAt: new Date() });
+                    showToast("Password accepted! Opening pack...");
+                    hidePasswordInputModal();
+                    await openPackLogic();
+                } else {
+                    showToast("Invalid or already used password.", true);
+                }
+            } catch (error) {
+                console.error("Error verifying password:", error);
+                showToast("Error verifying password.", true);
+            } finally {
+                packPasswordOpenBtn.disabled = false;
+                packPasswordOpenBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+
+        /**
+         * Contains the core logic for opening a pack of 3 random cards.
+         * Separated from the button click to be callable after password verification.
+         */
+        async function openPackLogic() {
+            if (vocabularyWords.length === 0) {
+                showToast("Please add vocabulary words first! Only the teacher can add vocabulary.", true);
+                return;
+            }
+
+            showLoading(packLoadingSpinner, openPackBtn);
+            packContainer.innerHTML = '';
+            noPackMessage.classList.add('hidden');
+            const pack = [];
+
+            try {
+                for (let i = 0; i < 3; i++) {
+                    let card = selectRandomCardByRarity(vocabularyWords);
+                    
+                    if (card) {
+                        pack.push(card);
+
+                        const collectedCardDocRef = doc(db, `artifacts/${__app_id}/users/${userId}/collected_cards`, card.id);
+                        const collectedCardSnap = await getDoc(collectedCardDocRef);
+
+                        if (collectedCardSnap.exists()) {
+                            await updateDoc(collectedCardDocRef, {
+                                count: increment(1),
+                                lastCollected: new Date()
+                            });
+                        } else {
+                            await setDoc(collectedCardDocRef, {
+                                word: card.word,
+                                definition: card.definition,
+                                rarity: card.rarity,
+                                count: 1,
+                                originalVocabId: card.id,
+                                timestamp: new Date()
+                            });
+                        }
+                    } else {
+                        showToast("Could not draw enough cards for the pack. Please add more vocabulary!", true);
+                        break;
+                    }
+                }
+
+                if (pack.length > 0) {
+                    pack.forEach(card => {
+                        packContainer.appendChild(createCardElement(card, false, true));
+                    });
+                } else {
+                    noPackMessage.classList.remove('hidden');
+                    noPackMessage.textContent = "Could not open a pack. Please ensure you have enough vocabulary words.";
+                }
+                showToast("Pack opened successfully! Click cards to reveal.");
+            } catch (error) {
+                console.error("Error opening pack:", error);
+                showToast("Failed to open pack.", true);
+            } finally {
+                hideLoading(packLoadingSpinner, openPackBtn);
+            }
+        }
+
+        /**
+         * Handles the submission of a new trade offer.
+         */
+        async function submitTradeOffer() {
+            if (!userId) {
+                showToast("User not authenticated. Please wait...", true);
+                return;
+            }
+            if (selectedOfferingCards.length === 0 || selectedWantingCards.length === 0) {
+                showToast("Please select cards you are offering AND cards you want.", true);
+                return;
+            }
+
+            submitTradeOfferBtn.disabled = true;
+            submitTradeOfferBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            try {
+                // Check if the user actually has the cards they are offering (important for atomicity)
+                const missingCards = [];
+                const tempCollectedCounts = {};
+                collectedCards.forEach(card => tempCollectedCounts[card.id] = card.count);
+
+                selectedOfferingCards.forEach(offeredCard => {
+                    if (tempCollectedCounts[offeredCard.id] && tempCollectedCounts[offeredCard.id] > 0) {
+                        tempCollectedCounts[offeredCard.id]--;
+                    } else {
+                        missingCards.push(offeredCard.word);
+                    }
+                });
+
+                if (missingCards.length > 0) {
+                    showToast(`Cannot offer trade: You do not have enough of the following cards: ${missingCards.join(', ')}.`, true);
+                    return;
+                }
+
+                // Corrected collection path for trades
+                const tradeDocRef = doc(collection(db, `artifacts/${__app_id}/public/data/trades`));
+                await setDoc(tradeDocRef, {
+                    offeringUserId: userId,
+                    offeredCards: selectedOfferingCards, // Full card data
+                    requestedCards: selectedWantingCards, // Full card data
+                    status: 'pending', // 'pending', 'accepted', 'rejected'
+                    timestamp: new Date()
+                });
+
+                showToast("Trade offer submitted successfully!");
+                hideOfferTradeModal();
+            } catch (error) {
+                console.error("Error submitting trade offer:", error);
+                showToast("Failed to submit trade offer.", true);
+            } finally {
+                submitTradeOfferBtn.disabled = false;
+                submitTradeOfferBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        /**
+         * Loads trade offers from Firestore and sets up a real-time listener.
+         */
+        async function loadTradeOffers() {
+            if (!userId) return;
+
+            try {
+                // Corrected collection path for trades
+                const q = query(
+                    collection(db, `artifacts/${__app_id}/public/data/trades`),
+                    where("status", "==", "pending") // Only show pending trades
+                );
+                onSnapshot(q, (snapshot) => {
+                    // Filter out your own pending trades from the 'Available Trades' list for others to accept
+                    currentTradeOffers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderTradeOffers(); // Re-render available trades
+                }, (error) => {
+                    console.error("Error getting real-time trade offers:", error);
+                    showToast("Failed to load trade offers.", true);
+                });
+            } catch (error) {
+                console.error("Error setting up trade offers listener:", error);
+                showToast("Failed to initialize trade offers loading.", true);
+            }
+        }
+
+        /**
+         * Cancels a trade offer made by the current user.
+         * @param {string} tradeId - The ID of the trade offer to cancel.
+         */
+        async function cancelTradeOffer(tradeId) {
+            if (!userId) {
+                showToast("User not authenticated. Please wait...", true);
+                return;
+            }
+            try {
+                // Corrected collection path for trades
+                const tradeRef = doc(db, `artifacts/${__app_id}/public/data/trades`, tradeId);
+                const tradeSnap = await getDoc(tradeRef);
+
+                if (!tradeSnap.exists()) {
+                    showToast("Trade offer not found or already cancelled.", true);
+                    return;
+                }
+
+                const tradeData = tradeSnap.data();
+                if (tradeData.offeringUserId !== userId) {
+                    showToast("You can only cancel your own trade offers.", true);
+                    return;
+                }
+
+                if (tradeData.status !== 'pending') {
+                    showToast("This trade offer is no longer pending and cannot be cancelled.", true);
+                    return;
+                }
+
+                // Just delete the trade offer document
+                await deleteDoc(tradeRef);
+                showToast("Trade offer cancelled successfully!");
+            } catch (error) {
+                console.error("Error cancelling trade offer:", error);
+                showToast("Failed to cancel trade offer.", true);
+            }
+        }
+
+
+        // --- Event Listeners ---
+        addWordToListBtn.addEventListener('click', addWordToPendingList);
+        saveAllVocabularyBtn.addEventListener('click', saveAllVocabulary);
+        generatePasswordsBtn.addEventListener('click', generatePackPasswords);
+
+        openPackBtn.addEventListener('click', showPasswordInputModal);
+        teacherLoginBtn.addEventListener('click', showTeacherPasswordModal);
+
+        // Navigation button logic
+        showManageVocabBtn.addEventListener('click', () => {
+            if (isTeacherMode) {
+                teacherOnlySection.classList.remove('hidden');
+                studentViewSection.classList.add('hidden');
+                tradesSection.classList.add('hidden');
+                showStudentViewBtn.classList.remove('hidden');
+            } else {
+                showToast("Only teachers can access this section. Please click 'Teacher Login' first.", true);
+            }
+        });
+
+        showCollectedCardsBtn.addEventListener('click', () => {
+            teacherOnlySection.classList.add('hidden');
+            studentViewSection.classList.remove('hidden'); // Show collected cards part of student section
+            tradesSection.classList.add('hidden');
+            if (isTeacherMode) {
+                showStudentViewBtn.classList.remove('hidden');
+            } else {
+                showStudentViewBtn.classList.add('hidden');
+            }
+        });
+
+        showTradesBtn.addEventListener('click', () => {
+            teacherOnlySection.classList.add('hidden');
+            studentViewSection.classList.add('hidden');
+            tradesSection.classList.remove('hidden');
+            if (isTeacherMode) {
+                showStudentViewBtn.classList.remove('hidden'); // Keep visible for teacher
+            } else {
+                showStudentViewBtn.classList.add('hidden'); // Hide for non-teachers
+            }
+            // Also render trade offers when entering this section
+            renderTradeOffers();
+        });
+
+        showStudentViewBtn.addEventListener('click', () => {
+            teacherOnlySection.classList.add('hidden');
+            studentViewSection.classList.remove('hidden');
+            tradesSection.classList.add('hidden'); // Hide trades when going to student view
+        });
+
+        // Offer Trade Modal Event Listeners
+        offerNewTradeBtn.addEventListener('click', () => {
+            if (collectedCards.length === 0) {
+                showToast("You need to have cards in your collection to offer a trade!", true);
+                return;
+            }
+            if (vocabularyWords.length === 0) {
+                 showToast("The teacher needs to add vocabulary words for you to request cards.", true);
+                 return;
+            }
+            selectedOfferingCards = []; // Reset selections
+            selectedWantingCards = []; // Reset selections
+            renderOfferTradeSelectors(); // Populate and render selectors
+            offerTradeModal.classList.remove('hidden');
+            void offerTradeModal.offsetWidth;
+            offerTradeModal.classList.add('show');
+        });
+
+        cancelOfferTradeBtn.addEventListener('click', hideOfferTradeModal);
+        submitTradeOfferBtn.addEventListener('click', submitTradeOffer);
+
+
+        /**
+         * Populates the "Cards I'm Offering" and "Cards I Want" sections in the offer trade modal.
+         */
+        function renderOfferTradeSelectors() {
+            // Cards I'm Offering (from collectedCards)
+            offeringCardsSelector.innerHTML = '';
+            if (collectedCards.length === 0) {
+                offeringCardsSelector.innerHTML = '<p class="text-gray-500 text-center w-full">No cards in your collection to offer.</p>';
+            } else {
+                // Deduplicate collectedCards by ID and sum their counts for display
+                const uniqueCollectedCards = {};
+                collectedCards.forEach(card => {
+                    if (uniqueCollectedCards[card.id]) {
+                        uniqueCollectedCards[card.id].count += card.count;
+                    } else {
+                        uniqueCollectedCards[card.id] = { ...card };
+                    }
+                });
+
+                Object.values(uniqueCollectedCards).forEach(card => {
+                    const cardElement = createCardElement(card, false, false, card.count, true); // true for isTradeSelectorItem
+                    // Check if this card is already selected for offering and apply 'selected' class
+                    if (selectedOfferingCards.some(c => c.id === card.id)) {
+                        cardElement.classList.add('selected');
+                    }
+                    offeringCardsSelector.appendChild(cardElement);
+                });
+            }
+
+            // Cards I Want (from vocabularyWords)
+            wantingCardsSelector.innerHTML = '';
+            if (vocabularyWords.length === 0) {
+                wantingCardsSelector.innerHTML = '<p class="text-gray-500 text-center w-full">No vocabulary words loaded from teacher.</p>';
+            } else {
+                vocabularyWords.forEach(card => {
+                    // Clone card data to avoid modifying original vocabularyWords objects
+                    const cardCopy = { ...card, count: 1 }; // Default to count 1 for wanting
+                    const cardElement = createCardElement(cardCopy, false, false, 1, true); // true for isTradeSelectorItem
+                    // Check if this card is already selected for wanting and apply 'selected' class
+                    if (selectedWantingCards.some(c => c.id === card.id)) {
+                        cardElement.classList.add('selected');
+                    }
+                    wantingCardsSelector.appendChild(cardElement);
+                });
+            }
+        }
+
+        /**
+         * Hides the offer trade modal and resets selections.
+         */
+        function hideOfferTradeModal() {
+            offerTradeModal.classList.remove('show');
+            offerTradeModal.addEventListener('transitionend', () => {
+                offerTradeModal.classList.add('hidden');
+                selectedOfferingCards = []; // Clear selections on hide
+                selectedWantingCards = []; // Clear selections on hide
+            }, { once: true });
+        }
+
+
+        // Initial Firebase and vocabulary load
+        initializeFirebase();
+
+        // Initial UI state: Student view (Collected Cards and Pack Opening) visible, Teacher and Trades hidden
+        teacherOnlySection.classList.add('hidden');
+        studentViewSection.classList.remove('hidden');
+        tradesSection.classList.add('hidden');
+
+        // Disable relevant buttons until auth is ready or teacher mode is active
+        saveAllVocabularyBtn.disabled = true;
+        addWordToListBtn.disabled = true;
+        openPackBtn.disabled = true; // Enabled by auth check
+        showManageVocabBtn.disabled = true;
+        showCollectedCardsBtn.disabled = true;
+        showTradesBtn.disabled = true; // Enabled by auth check
+        showStudentViewBtn.disabled = true; // Enabled by auth check
+        teacherLoginBtn.disabled = false;
+        generatePasswordsBtn.disabled = true;
+    </script>
+</body>
+</html>
